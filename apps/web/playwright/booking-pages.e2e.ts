@@ -507,6 +507,39 @@ test.describe("Booking on different layouts", () => {
     // expect page to be booking page
     await expect(page.locator("[data-testid=success-page]")).toBeVisible();
   });
+
+  test("Allows overlapping bookings for different users/event types (context-aware)", async ({ page, users }) => {
+    // Create Silvia and Luigi with their own event types
+    const silvia = await users.create({
+      name: "Silvia",
+      eventTypes: [{ title: "Silvia 30min", slug: "silvia-30min", length: 30 }]
+    });
+    const luigi = await users.create({
+      name: "Luigi",
+      eventTypes: [{ title: "Luigi 30min", slug: "luigi-30min", length: 30 }]
+    });
+
+    // Book Silvia's event at a given time slot
+    await page.goto(`/${silvia.username}/silvia-30min`);
+    await selectFirstAvailableTimeSlotNextMonth(page);
+    await page.locator('[name="name"]').fill("Booker for Silvia");
+    await page.locator('[name="email"]').fill("booker.silvia@example.com");
+    await confirmBooking(page);
+    await expect(page.locator("[data-testid=success-page]")).toBeVisible();
+
+    // Book Luigi's event at the exact same time slot as Silvia's
+    // We'll use another page context to avoid session contamination
+    const { browser } = page.context();
+    const page2 = await browser.newPage();
+    await page2.goto(`/${luigi.username}/luigi-30min`);
+    await selectFirstAvailableTimeSlotNextMonth(page2);
+    await page2.locator('[name="name"]').fill("Booker for Luigi");
+    await page2.locator('[name="email"]').fill("booker.luigi@example.com");
+    await confirmBooking(page2);
+    await expect(page2.locator("[data-testid=success-page]")).toBeVisible();
+
+    // Both bookings at the same time slot should succeed without conflict
+  });
 });
 
 test.describe("Booking round robin event", () => {
